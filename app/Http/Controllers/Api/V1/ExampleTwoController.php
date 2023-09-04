@@ -2,16 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Excel\ExcelImport;
 use App\Http\Controllers\Controller;
 use App\Models\TableA;
 use App\Models\TableB;
 use Illuminate\Http\Request;
-use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 
-
-class ExampleController extends Controller
+class ExampleTwoController extends Controller
 {
     public function handle(Request $request)
     {
@@ -20,17 +18,34 @@ class ExampleController extends Controller
             return response()->json(['error' => 'The required Excel file is missing.'], 422);
         }
 
-        // 2. Parse Excel File
+        // 2. Parse the Excel File
         $excelA = $request->file('excel_a');
 
-        // 3. Change Data To Array
-        $dataA = Excel::toArray([], $excelA);
+        // 3. Load the Excel File
+        $spreadsheet = IOFactory::load($excelA);
+        $worksheet = $spreadsheet->getActiveSheet();
+
+        // 4. Get the Data and Calculate Formulas
+        $dataA = [];
+
+        foreach ($worksheet->getRowIterator() as $row) {
+            $rowData = [];
+
+            foreach ($row->getCellIterator() as $cell) {
+                // Get the calculated value of the cell (including formulas)
+                $rowData[] = $cell->getCalculatedValue();
+            }
+
+            $dataA[] = $rowData;
+        }
+
+        // Now $dataA contains the calculated values of the cells in Excel file
 
         $batchSize = 100; // Adjust this based on your server's capabilities
-        $countSimilar = 0; // count of similar row between table a and b
+        $countSimilar = 0; // Count of similar rows between table A and B
 
-        // 4. Process the data in batches For Table A and 700 rows similar for table B
-        foreach (array_chunk($dataA[0], $batchSize) as $batch) {
+        // 5. Process the data in batches for Table A and 700 rows similar for Table B
+        foreach (array_chunk($dataA, $batchSize) as $batch) {
             $upsertData = [];
 
             foreach ($batch as $row) {
@@ -55,7 +70,7 @@ class ExampleController extends Controller
             }
         }
 
-        // 5. Create 300 rows randomly for Table B
+        // 6. Create 300 rows randomly for Table B
         $countRandomRows = 300;
 
         for ($i = 0; $i < $countRandomRows; $i++) {
@@ -72,14 +87,18 @@ class ExampleController extends Controller
 
         // 7. Get the count of rows with similar phone numbers in Table A and B
         $countCommonProductA = DB::table('table_b_s')
-            ->join('table_a_s', 'table_b_s.phone', '=', 'table_a_s.phone')
-            ->where('table_b_s.product', 'a')
+            ->join('table_a_s', function ($join) {
+                $join->on('table_b_s.phone', '=', 'table_a_s.phone')
+                    ->where('table_b_s.product', '=', 'a');
+            })
             ->count();
 
         // 8. Calculate the count of rows in Table B with product 'b' and have a common phone number with Table A
         $countCommonProductB = DB::table('table_b_s')
-            ->join('table_a_s', 'table_b_s.phone', '=', 'table_a_s.phone')
-            ->where('table_b_s.product', 'b')
+            ->join('table_a_s', function ($join) {
+                $join->on('table_b_s.phone', '=', 'table_a_s.phone')
+                    ->where('table_b_s.product', '=', 'b');
+            })
             ->count();
 
         return response()->json([
@@ -102,6 +121,4 @@ class ExampleController extends Controller
     {
         return rand(1, 2) === 1 ? 'a' : 'b';
     }
-
-
 }

@@ -19,5 +19,5 @@ use Illuminate\Support\Facades\Route;
 //});
 
 Route::group(['prefix' => 'v1'] , function (){
-    Route::post('example' , [\App\Http\Controllers\Api\V1\ExampleController::class , 'handle']);
+    Route::post('example' , [\App\Http\Controllers\Api\V1\ExampleTwoController::class , 'handle']);
 });
